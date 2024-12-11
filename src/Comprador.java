@@ -9,13 +9,26 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class Comprador extends Agent {
     private Map<String, Integer> librosDeseados = new HashMap<>();
     private Map<String, EscucharSubastasBehaviour> subastasActivas  = new HashMap<>();
+    private CompradorGUI gui;
 
-    private void anadirLibro(String libro, int max) {
+    public List<DataComprador> obtenerSubastasData() {
+        // Convertir las subastas activas de SubastaBehaviour a SubastaData
+        return subastasActivas.values().stream()
+                .map(behaviour -> new DataComprador(
+                        behaviour.getLibro(),
+                        behaviour.getPrecioActual(),
+                        behaviour.isEsGanadorActual()))
+                .collect(Collectors.toList());
+    }
+
+    public void anadirLibro(String libro, int max) {
         if (libro != null && max!= 0) {
             librosDeseados.put(libro, max);
         }
@@ -29,7 +42,7 @@ public class Comprador extends Agent {
         librosDeseados.remove(libro);
     }
 
-    private void abandonarSubasta(String libro) {
+    public boolean abandonarSubasta(String libro) {
         if (libro != null) {
             eliminarLibro(libro);
             EscucharSubastasBehaviour behaviour = subastasActivas.get(libro);
@@ -37,21 +50,32 @@ public class Comprador extends Agent {
                 if (!behaviour.isEsGanadorActual()) {
                     removeBehaviour(behaviour);
                     subastasActivas.remove(libro);
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     @Override
     protected void setup() {
+        gui = new CompradorGUI(this);
         // Suscribir al DFService
         suscribirDF();
 
         //System.out.println("Comprador listo para participar en subastas.");
 
-        anadirLibro("LibroX", 70);
+        //anadirLibro("LibroX", 70);
+    }
 
-
+    @Override
+    protected void takeDown() {
+        // Cerrar la GUI cuando el agente se elimina
+        desuscribirDF();
+        if (gui != null) {
+            gui.dispose(); // Cerrar la ventana
+        }
+        System.out.println("Agente Comprador finalizado.");
     }
 
     private void suscribirDF() {
@@ -75,9 +99,25 @@ public class Comprador extends Agent {
         }
     }
 
+    private void desuscribirDF() {
+        // Crear una descripción del agente para el DFService
+        DFAgentDescription dfd = new DFAgentDescription();
+        dfd.setName(getAID()); // Nombre del agente (se obtiene usando getAID())
+
+        try {
+            // Eliminar el comprador del DFService
+            DFService.deregister(this, dfd);
+            System.out.println("Agente desuscrito del DFService.");
+        } catch (FIPAException fe) {
+            fe.printStackTrace();
+        }
+    }
+
+
     private class EscucharSubastasBehaviour extends CyclicBehaviour {
         private String libro;
         private int max;
+        private int precioActual = 0;
         private boolean esGanadorActual = false;
 
         public String getLibro() {
@@ -86,6 +126,10 @@ public class Comprador extends Agent {
 
         public void setLibro(String libro) {
             this.libro = libro;
+        }
+
+        public int getPrecioActual() {
+            return precioActual;
         }
 
         public boolean isEsGanadorActual() {
@@ -131,8 +175,10 @@ public class Comprador extends Agent {
             ACLMessage mensajeACP = myAgent.receive(acp);
             if (mensajeACP != null) {
                 String contenidoACP = mensajeACP.getContent();
-                if (libro.equals(contenidoACP)) {
+                if (libro.equals(contenidoACP.split(" ")[0])) {
                     esGanadorActual = true;
+                    precioActual = Integer.parseInt(contenidoACP.split(" ")[1]);
+                    gui.actualizarTabla(obtenerSubastasData());
                 }
             }
 
@@ -141,8 +187,10 @@ public class Comprador extends Agent {
             ACLMessage mensajeRJP = myAgent.receive(rjp);
             if (mensajeRJP != null) {
                 String contenidoRJP = mensajeRJP.getContent();
-                if (libro.equals(contenidoRJP)) {
+                if (libro.equals(contenidoRJP.split(" ")[0])) {
                     esGanadorActual = false;
+                    precioActual = Integer.parseInt(contenidoRJP.split(" ")[1]);
+                    gui.actualizarTabla(obtenerSubastasData());
                 }
             }
 
@@ -154,6 +202,8 @@ public class Comprador extends Agent {
                 if (libro.equals(contenidoREQUEST.split(" ")[2])) {
                     esGanadorActual = false;
                     abandonarSubasta(libro);
+                    precioActual = Integer.parseInt(contenidoREQUEST.split(" ")[4]);
+                    gui.actualizarTabla(obtenerSubastasData());
                     return;
                 }
             }
@@ -165,6 +215,8 @@ public class Comprador extends Agent {
                 String contenidoINFORM = mensajeINFORM.getContent();
                 if (contenidoINFORM.split(" ")[0].equals("FIN")) {
                     abandonarSubasta(libro);
+                    precioActual = Integer.parseInt(contenidoINFORM.split(" ")[7]);
+                    gui.actualizarTabla(obtenerSubastasData());
                 }
             }
         }

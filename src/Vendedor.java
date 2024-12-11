@@ -11,14 +11,25 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class Vendedor extends Agent {
     private Map<String, PrecioIncremento> libros = new HashMap<>();
     private Map<String, SubastaBehaviour> subastasActivas = new HashMap<>();
-    private boolean primeraRonda = true; // Para enviar el mensaje inicial solo una vez
-    private boolean ultimaRonda = false; // Para terminar
+    private VendedorGUI gui;
 
-    private void anadirLibro(String libro, int precio, int incremento) {
+    public List<DataVendedor> obtenerSubastasData() {
+        // Convertir las subastas activas de SubastaBehaviour a SubastaData
+        return subastasActivas.values().stream()
+                .map(behaviour -> new DataVendedor(
+                        behaviour.getLibro(),
+                        behaviour.getPrecio(),
+                        (behaviour.getGanador() != null) ? behaviour.getGanador().getLocalName() : " ",
+                        behaviour.getNumRespondedores()))
+                .collect(Collectors.toList());
+    }
+
+    public void anadirLibro(String libro, int precio, int incremento) {
         if (libro!=null) {
             libros.put(libro, new PrecioIncremento(precio, incremento));
             SubastaBehaviour behaviour = new SubastaBehaviour(this, libro, precio, incremento);
@@ -27,7 +38,7 @@ public class Vendedor extends Agent {
         }
     }
 
-    private void eliminarLibro(String libro) {
+    public void eliminarLibro(String libro) {
         if (libro != null) {
             libros.remove(libro);
             SubastaBehaviour behaviour = subastasActivas.get(libro);
@@ -49,18 +60,49 @@ public class Vendedor extends Agent {
 
     @Override
     protected void setup() {
-        esperar(10);
+        List<DataVendedor> subastas = new ArrayList<>();
+        gui = new VendedorGUI(this, subastas);
+        //esperar(10);
 
-        anadirLibro("LibroX", 50, 10);
+        //anadirLibro("LibroX", 50, 10);
         //System.out.println("Vendedor listo para subastar " + libro);
 
     }
+
+    @Override
+    protected void takeDown() {
+        // Cerrar la GUI cuando el agente se elimina
+        if (gui != null) {
+            gui.dispose(); // Cerrar la ventana
+        }
+        System.out.println("Agente Vendedor finalizado.");
+    }
+
 
     private class SubastaBehaviour extends CyclicBehaviour {
         private String libro;
         private int precio;
         private int incremento;
         private AID ganador = null;
+        private int numRespondedores = 0;
+        private boolean primeraRonda = true; // Para enviar el mensaje inicial solo una vez
+        private boolean ultimaRonda = false; // Para terminar
+
+        public String getLibro() {
+            return libro;
+        }
+
+        public int getPrecio() {
+            return precio;
+        }
+
+        public AID getGanador() {
+            return ganador;
+        }
+
+        public int getNumRespondedores() {
+            return numRespondedores;
+        }
 
         public SubastaBehaviour(Agent a, String libro, int precio, int incremento) {
             super(a); // Configurar el periodo de 10 segundos
@@ -76,10 +118,11 @@ public class Vendedor extends Agent {
 
             // Obtener la lista de compradores activos (solo la primera vez)
             List<AID> compradores = obtenerCompradores();
-            if (compradores.size() <= 1) {
+            System.out.println("IMPORTANTE " + compradores.size() + " compradores.");
+            if (compradores.isEmpty()) {
                 // Si hay 1 comprador o menos, terminamos la subasta
-                System.out.println("[V]\tSubasta terminada: " +
-                        (compradores.isEmpty() ? "No hay compradores." : "Solo queda un comprador."));
+                System.out.println("[V]\tSubasta terminada: No hay compradores.");
+                eliminarLibro(libro);
                 doDelete();
                 return;
             }
@@ -106,12 +149,7 @@ public class Vendedor extends Agent {
                 send(cfProposal);
                 System.out.println("[V]\tEnviado 'call-for-proposal' a " + compradores.size() + " compradores.");
 
-                try {
-                    // Esperar 10 segundos para recibir respuestas
-                    Thread.sleep(10000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                esperar(10);
 
                 // Procesar respuestas
                 MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.PROPOSE);
@@ -127,14 +165,15 @@ public class Vendedor extends Agent {
                     reply = receive(mt); // Recibir el siguiente mensaje
                 }
 
-                System.out.println("[V]\tRecibidas " + respondedores.size() + " propuestas.");
+                numRespondedores = respondedores.size();
+                gui.actualizarTabla(obtenerSubastasData());
 
-                if (respondedores.size()>=2) {
+                if (numRespondedores>=2) {
                     if (ganador != null) {
                         // Enviar ACCEPT_PROPOSAL al ganador
                         ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
                         accept.addReceiver(ganador);
-                        accept.setContent(libro);
+                        accept.setContent(libro + " " + precio);
                         send(accept);
                         System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
 
@@ -143,11 +182,12 @@ public class Vendedor extends Agent {
                             if (!comprador.equals(ganador)) {
                                 ACLMessage reject = new ACLMessage(ACLMessage.REJECT_PROPOSAL);
                                 reject.addReceiver(comprador);
-                                reject.setContent(libro);
+                                reject.setContent(libro + " " + precio);
                                 send(reject);
                                 System.out.println("[V]\tEnviado 'reject-proposal' a " + comprador.getName());
                             }
                         }
+                        gui.actualizarTabla(obtenerSubastasData());
                         // Incrementar precio para la próxima ronda
                         precio += incremento;
                         System.out.println("[V]\tPrecio incrementado a: " + precio);
@@ -178,6 +218,8 @@ public class Vendedor extends Agent {
 
                     // Borramos el agente
                     esperar(10);
+                    eliminarLibro(libro);
+                } else {
                     eliminarLibro(libro);
                 }
             }
