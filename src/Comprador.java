@@ -13,15 +13,33 @@ import java.util.Map;
 
 public class Comprador extends Agent {
     private Map<String, Integer> librosDeseados = new HashMap<>();
+    private Map<String, EscucharSubastasBehaviour> subastasActivas  = new HashMap<>();
 
     private void anadirLibro(String libro, int max) {
         if (libro != null && max!= 0) {
             librosDeseados.put(libro, max);
         }
+        EscucharSubastasBehaviour behaviour = new EscucharSubastasBehaviour(this, libro, max);
+        subastasActivas.put(libro, behaviour);
+        // Comienza el comportamiento de escuchar las ofertas de subasta
+        addBehaviour(behaviour);
     }
 
     private void eliminarLibro(String libro) {
         librosDeseados.remove(libro);
+    }
+
+    private void abandonarSubasta(String libro) {
+        if (libro != null) {
+            eliminarLibro(libro);
+            EscucharSubastasBehaviour behaviour = subastasActivas.get(libro);
+            if (behaviour != null) {
+                if (!behaviour.isEsGanadorActual()) {
+                    removeBehaviour(behaviour);
+                    subastasActivas.remove(libro);
+                }
+            }
+        }
     }
 
     @Override
@@ -33,8 +51,7 @@ public class Comprador extends Agent {
 
         anadirLibro("LibroX", 70);
 
-        // Comienza el comportamiento de escuchar las ofertas de subasta
-        addBehaviour(new EscucharSubastasBehaviour(this));
+
     }
 
     private void suscribirDF() {
@@ -59,9 +76,28 @@ public class Comprador extends Agent {
     }
 
     private class EscucharSubastasBehaviour extends CyclicBehaviour {
+        private String libro;
+        private int max;
+        private boolean esGanadorActual = false;
 
-        public EscucharSubastasBehaviour(Agent a) {
+        public String getLibro() {
+            return libro;
+        }
+
+        public void setLibro(String libro) {
+            this.libro = libro;
+        }
+
+        public boolean isEsGanadorActual() {
+            return esGanadorActual;
+        }
+
+        public EscucharSubastasBehaviour(Agent a, String libro, int max) {
             super(a);
+            if (libro!=null) {
+                this.libro = libro;
+            }
+            this.max = max;
         }
 
         @Override
@@ -80,7 +116,7 @@ public class Comprador extends Agent {
                 int precioRecibido = Integer.parseInt(partes[4]);  // El precio de la subasta
 
                 // Verificar si el libro está en la lista de compras y si el precio está dentro del presupuesto
-                if (librosDeseados.containsKey(libroRecibido) && librosDeseados.get(libroRecibido) >= precioRecibido) {
+                if (libro.equals(libroRecibido) && max >= precioRecibido) {
                     // Enviar una respuesta "propose"
                     ACLMessage mensajePropuesta = new ACLMessage(ACLMessage.PROPOSE);
                     mensajePropuesta.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
@@ -88,8 +124,48 @@ public class Comprador extends Agent {
                     send(mensajePropuesta);
                     System.out.println("[C]\tEnviado 'propose' al vendedor por el libro: " + libroRecibido + " | " + precioRecibido);
                 }
-            } else {
-                block();  // Bloquea el comportamiento hasta que se reciba un mensaje
+            }
+
+            // Esperar un mensaje de tipo "ACCEPT_PROPOSAL"
+            MessageTemplate acp = MessageTemplate.MatchPerformative(ACLMessage.ACCEPT_PROPOSAL);
+            ACLMessage mensajeACP = myAgent.receive(acp);
+            if (mensajeACP != null) {
+                String contenidoACP = mensajeACP.getContent();
+                if (libro.equals(contenidoACP)) {
+                    esGanadorActual = true;
+                }
+            }
+
+            // Esperar un mensaje de tipo "REJECT_PROPOSAL"
+            MessageTemplate rjp = MessageTemplate.MatchPerformative(ACLMessage.REJECT_PROPOSAL);
+            ACLMessage mensajeRJP = myAgent.receive(rjp);
+            if (mensajeRJP != null) {
+                String contenidoRJP = mensajeRJP.getContent();
+                if (libro.equals(contenidoRJP)) {
+                    esGanadorActual = false;
+                }
+            }
+
+            // Esperar un mensaje de tipo "REQUEST"
+            MessageTemplate request = MessageTemplate.MatchPerformative(ACLMessage.REQUEST);
+            ACLMessage mensajeREQUEST = myAgent.receive(request);
+            if (mensajeREQUEST != null) {
+                String contenidoREQUEST = mensajeREQUEST.getContent();
+                if (libro.equals(contenidoREQUEST.split(" ")[2])) {
+                    esGanadorActual = false;
+                    abandonarSubasta(libro);
+                    return;
+                }
+            }
+
+            // Esperar un mensaje de tipo "INFORM"
+            MessageTemplate inform = MessageTemplate.MatchPerformative(ACLMessage.INFORM);
+            ACLMessage mensajeINFORM = myAgent.receive(inform);
+            if (mensajeINFORM != null) {
+                String contenidoINFORM = mensajeINFORM.getContent();
+                if (contenidoINFORM.split(" ")[0].equals("FIN")) {
+                    abandonarSubasta(libro);
+                }
             }
         }
     }

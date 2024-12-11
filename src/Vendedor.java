@@ -14,41 +14,53 @@ import java.util.Map;
 
 public class Vendedor extends Agent {
     private Map<String, PrecioIncremento> libros = new HashMap<>();
-    private AID ganador = null;
+    private Map<String, SubastaBehaviour> subastasActivas = new HashMap<>();
     private boolean primeraRonda = true; // Para enviar el mensaje inicial solo una vez
     private boolean ultimaRonda = false; // Para terminar
 
     private void anadirLibro(String libro, int precio, int incremento) {
         if (libro!=null) {
             libros.put(libro, new PrecioIncremento(precio, incremento));
+            SubastaBehaviour behaviour = new SubastaBehaviour(this, libro, precio, incremento);
+            subastasActivas.put(libro, behaviour);
+            addBehaviour(behaviour);
         }
     }
 
     private void eliminarLibro(String libro) {
-        libros.remove(libro);
+        if (libro != null) {
+            libros.remove(libro);
+            SubastaBehaviour behaviour = subastasActivas.get(libro);
+            if (behaviour != null) {
+                removeBehaviour(behaviour);
+                subastasActivas.remove(libro);
+            }
+        }
+
+    }
+
+    private void esperar(int segundos) {
+        try {
+            Thread.sleep(segundos * 1000L);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     protected void setup() {
+        esperar(10);
+
         anadirLibro("LibroX", 50, 10);
         //System.out.println("Vendedor listo para subastar " + libro);
-        try {
-            Thread.sleep(10000);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
 
-        for (String libro : libros.keySet()) {
-            addBehaviour(new SubastaBehaviour(this, libro,
-                    libros.get(libro).getPrecio(),
-                    libros.get(libro).getIncremento())); // Comportamiento periódico
-        }
     }
 
     private class SubastaBehaviour extends CyclicBehaviour {
         private String libro;
         private int precio;
         private int incremento;
+        private AID ganador = null;
 
         public SubastaBehaviour(Agent a, String libro, int precio, int incremento) {
             super(a); // Configurar el periodo de 10 segundos
@@ -122,7 +134,7 @@ public class Vendedor extends Agent {
                         // Enviar ACCEPT_PROPOSAL al ganador
                         ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
                         accept.addReceiver(ganador);
-                        accept.setContent("¡Felicidades! Ganaste esta ronda.");
+                        accept.setContent(libro);
                         send(accept);
                         System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
 
@@ -131,7 +143,7 @@ public class Vendedor extends Agent {
                             if (!comprador.equals(ganador)) {
                                 ACLMessage reject = new ACLMessage(ACLMessage.REJECT_PROPOSAL);
                                 reject.addReceiver(comprador);
-                                reject.setContent("Propuesta rechazada.");
+                                reject.setContent(libro);
                                 send(reject);
                                 System.out.println("[V]\tEnviado 'reject-proposal' a " + comprador.getName());
                             }
@@ -148,7 +160,7 @@ public class Vendedor extends Agent {
                     // Se informa a los no ganadores
                     ACLMessage informFinal = new ACLMessage(ACLMessage.INFORM);
                     // Establecer el contenido del mensaje
-                    informFinal.setContent(ganador.getName() + " ha ganado " + libro + " por " + precio);
+                    informFinal.setContent("FIN | " + ganador.getName() + " ha ganado " + libro + " por " + precio);
                     // Especificar los receptores del mensaje (!= ganador en DFService)
                     for (AID comprador : compradores) {
                         if (!comprador.equals(ganador)) {
@@ -165,7 +177,8 @@ public class Vendedor extends Agent {
                     send(request);
 
                     // Borramos el agente
-                    doDelete();
+                    esperar(10);
+                    eliminarLibro(libro);
                 }
             }
         }
