@@ -1,6 +1,5 @@
 import jade.core.Agent;
 import jade.core.behaviours.CyclicBehaviour;
-import jade.core.behaviours.TickerBehaviour;
 import jade.core.AID;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
@@ -8,35 +7,61 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.domain.FIPAAgentManagement.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
 
 public class Vendedor extends Agent {
-    private String libro = "LibroX";
-    private int precio = 50;
-    private int incremento = 10;
+    private Map<String, PrecioIncremento> libros = new HashMap<>();
     private AID ganador = null;
     private boolean primeraRonda = true; // Para enviar el mensaje inicial solo una vez
     private boolean ultimaRonda = false; // Para terminar
 
+    private void anadirLibro(String libro, int precio, int incremento) {
+        if (libro!=null) {
+            libros.put(libro, new PrecioIncremento(precio, incremento));
+        }
+    }
+
+    private void eliminarLibro(String libro) {
+        libros.remove(libro);
+    }
+
     @Override
     protected void setup() {
-        System.out.println("Vendedor listo para subastar " + libro);
+        anadirLibro("LibroX", 50, 10);
+        //System.out.println("Vendedor listo para subastar " + libro);
         try {
             Thread.sleep(10000);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        addBehaviour(new SubastaBehaviour(this)); // Comportamiento periódico
+
+        for (String libro : libros.keySet()) {
+            addBehaviour(new SubastaBehaviour(this, libro,
+                    libros.get(libro).getPrecio(),
+                    libros.get(libro).getIncremento())); // Comportamiento periódico
+        }
     }
 
     private class SubastaBehaviour extends CyclicBehaviour {
-        public SubastaBehaviour(Agent a) {
+        private String libro;
+        private int precio;
+        private int incremento;
+
+        public SubastaBehaviour(Agent a, String libro, int precio, int incremento) {
             super(a); // Configurar el periodo de 10 segundos
+            if (libro!=null) {
+                this.libro = libro;
+            }
+            this.precio = precio;
+            this.incremento = incremento;
         }
 
         @Override
         public void action() {
+
             // Obtener la lista de compradores activos (solo la primera vez)
             List<AID> compradores = obtenerCompradores();
             if (compradores.size() <= 1) {

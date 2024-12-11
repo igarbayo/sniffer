@@ -8,9 +8,21 @@ import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class Comprador extends Agent {
-    private String libroDeseado = "LibroX";
-    private int limiteGasto = 70;  // Limite máximo que el comprador puede gastar
+    private Map<String, Integer> librosDeseados = new HashMap<>();
+
+    private void anadirLibro(String libro, int max) {
+        if (libro != null && max!= 0) {
+            librosDeseados.put(libro, max);
+        }
+    }
+
+    private void eliminarLibro(String libro) {
+        librosDeseados.remove(libro);
+    }
 
     @Override
     protected void setup() {
@@ -18,6 +30,8 @@ public class Comprador extends Agent {
         suscribirDF();
 
         //System.out.println("Comprador listo para participar en subastas.");
+
+        anadirLibro("LibroX", 70);
 
         // Comienza el comportamiento de escuchar las ofertas de subasta
         addBehaviour(new EscucharSubastasBehaviour(this));
@@ -66,7 +80,7 @@ public class Comprador extends Agent {
                 int precioRecibido = Integer.parseInt(partes[4]);  // El precio de la subasta
 
                 // Verificar si el libro está en la lista de compras y si el precio está dentro del presupuesto
-                if (libroRecibido.equals(libroDeseado) && limiteGasto >= precioRecibido) {
+                if (librosDeseados.containsKey(libroRecibido) && librosDeseados.get(libroRecibido) >= precioRecibido) {
                     // Enviar una respuesta "propose"
                     ACLMessage mensajePropuesta = new ACLMessage(ACLMessage.PROPOSE);
                     mensajePropuesta.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
