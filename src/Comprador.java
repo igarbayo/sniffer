@@ -18,6 +18,10 @@ public class Comprador extends Agent {
     private Map<String, EscucharSubastasBehaviour> subastasActivas  = new HashMap<>();
     private CompradorGUI gui;
 
+    public Map<String, Integer> getLibrosDeseados() {
+        return librosDeseados;
+    }
+
     public List<DataComprador> obtenerSubastasData() {
         // Convertir las subastas activas de SubastaBehaviour a SubastaData
         return subastasActivas.values().stream()
@@ -38,8 +42,12 @@ public class Comprador extends Agent {
         addBehaviour(behaviour);
     }
 
-    private void eliminarLibro(String libro) {
-        librosDeseados.remove(libro);
+    public boolean eliminarLibro(String libro) {
+        if (librosDeseados.containsKey(libro)) {
+            librosDeseados.remove(libro);
+            return true;
+        }
+        return false;
     }
 
     public boolean abandonarSubasta(String libro) {
@@ -146,6 +154,7 @@ public class Comprador extends Agent {
 
         @Override
         public void action() {
+
             // Esperar un mensaje de tipo "call-for-proposal"
             MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.CFP);
             ACLMessage mensajeCFP = myAgent.receive(mt);
@@ -167,6 +176,8 @@ public class Comprador extends Agent {
                     mensajePropuesta.setContent("Estoy interesado en el libro " + libroRecibido + " por " + precioRecibido);
                     send(mensajePropuesta);
                     System.out.println("[C]\tEnviado 'propose' al vendedor por el libro: " + libroRecibido + " | " + precioRecibido);
+                } else {
+                    System.out.println("nada");
                 }
             }
 

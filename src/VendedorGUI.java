@@ -78,17 +78,25 @@ public class VendedorGUI extends JFrame {
 
         // Crear el layout con BoxLayout para la parte superior
         JPanel panelSuperior = new JPanel();
-        panelSuperior.setLayout(new BoxLayout(panelSuperior, BoxLayout.Y_AXIS)); // Apilar los componentes verticalmente
+        panelSuperior.setLayout(new GridLayout(5, 3)); // Apilar los componentes verticalmente
         panelSuperior.setAlignmentX(Component.LEFT_ALIGNMENT); // Alineación a la izquierda
 
         // Agregar los componentes de los campos de entrada y el botón
         panelSuperior.add(new JLabel("Libro:"));
         panelSuperior.add(libroTextField);
+        panelSuperior.add(new JLabel(" "));
         panelSuperior.add(new JLabel("Precio:"));
         panelSuperior.add(precioTextField);
+        panelSuperior.add(new JLabel(" "));
         panelSuperior.add(new JLabel("Incremento:"));
         panelSuperior.add(incrementoTextField);
         panelSuperior.add(iniciarSubastaButton);
+        panelSuperior.add(new JLabel(" "));
+        panelSuperior.add(new JLabel(" "));
+        panelSuperior.add(new JLabel(" "));
+        panelSuperior.add(new JLabel(" "));
+        panelSuperior.add(new JLabel("      LISTA DE SUBASTAS"));
+        panelSuperior.add(new JLabel(" "));
 
         // Agregar la tabla
         add(panelSuperior, BorderLayout.NORTH);

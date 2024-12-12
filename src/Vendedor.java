@@ -192,20 +192,25 @@ public class Vendedor extends Agent {
                         precio += incremento;
                         System.out.println("[V]\tPrecio incrementado a: " + precio);
                     }
-                } else {
+                } else if (numRespondedores==1){
+                    // Enviar ACCEPT_PROPOSAL al ganador
+                    ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
+                    accept.addReceiver(ganador);
+                    accept.setContent(libro + " " + precio);
+                    send(accept);
+                    System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
+                    // pasamos a la última ronda
                     ultimaRonda = true;
-                }
+                } // si numRespondedores==0, se sigue lanzando la peticion sin incrementar el precio
             } else {
                 if (ganador != null) {
                     // Se informa a los no ganadores
                     ACLMessage informFinal = new ACLMessage(ACLMessage.INFORM);
                     // Establecer el contenido del mensaje
                     informFinal.setContent("FIN | " + ganador.getName() + " ha ganado " + libro + " por " + precio);
-                    // Especificar los receptores del mensaje (!= ganador en DFService)
+                    // Especificar los receptores del mensaje (en DFService)
                     for (AID comprador : compradores) {
-                        if (!comprador.equals(ganador)) {
-                            informFinal.addReceiver(comprador);
-                        }
+                        informFinal.addReceiver(comprador);
                     }
                     // Enviar el mensaje
                     send(informFinal);
