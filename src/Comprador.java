@@ -15,11 +15,16 @@ import java.util.stream.Collectors;
 
 public class Comprador extends Agent {
     private Map<String, Integer> librosDeseados = new HashMap<>();
+    private Map<String, Integer> librosComprados = new HashMap<>();
     private Map<String, EscucharSubastasBehaviour> subastasActivas  = new HashMap<>();
     private CompradorGUI gui;
 
     public Map<String, Integer> getLibrosDeseados() {
         return librosDeseados;
+    }
+
+    public Map<String, Integer> getLibrosComprados() {
+        return librosComprados;
     }
 
     public List<DataComprador> obtenerSubastasData() {
@@ -42,6 +47,12 @@ public class Comprador extends Agent {
         addBehaviour(behaviour);
     }
 
+    public void comprarLibro(String libro, int precio) {
+        if (libro != null && precio != 0) {
+            librosComprados.put(libro, precio);
+        }
+    }
+
     public boolean eliminarLibro(String libro) {
         if (librosDeseados.containsKey(libro)) {
             librosDeseados.remove(libro);
@@ -58,6 +69,7 @@ public class Comprador extends Agent {
                 if (!behaviour.isEsGanadorActual()) {
                     removeBehaviour(behaviour);
                     subastasActivas.remove(libro);
+                    gui.actualizarTabla(obtenerSubastasData());
                     return true;
                 }
             }
@@ -214,7 +226,11 @@ public class Comprador extends Agent {
                     esGanadorActual = false;
                     abandonarSubasta(libro);
                     precioActual = Integer.parseInt(contenidoREQUEST.split(" ")[4]);
+                    librosComprados.put(libro, precioActual);
+                    librosDeseados.remove(libro);
                     gui.actualizarTabla(obtenerSubastasData());
+                    gui.actualizarTablaLibrosDeseados(getLibrosDeseados());
+                    gui.actualizarTablaComprados(getLibrosComprados());
                     return;
                 }
             }

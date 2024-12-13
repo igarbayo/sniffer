@@ -202,6 +202,7 @@ public class Vendedor extends Agent {
                     // pasamos a la última ronda
                     ultimaRonda = true;
                 } // si numRespondedores==0, se sigue lanzando la peticion sin incrementar el precio
+            // Comportamiento para la última ronda
             } else {
                 if (ganador != null) {
                     // Se informa a los no ganadores
@@ -221,11 +222,12 @@ public class Vendedor extends Agent {
                     request.addReceiver(ganador);
                     send(request);
 
-                    // Borramos el agente
-                    esperar(10);
+                    // ELiminamos la subasta
                     eliminarLibro(libro);
+                    gui.actualizarTabla(obtenerSubastasData());
                 } else {
                     eliminarLibro(libro);
+                    gui.actualizarTabla(obtenerSubastasData());
                 }
             }
         }

@@ -15,7 +15,9 @@ public class CompradorGUI extends JFrame {
     private JTable tablaSubastas; // Tabla para mostrar las subastas
     private DefaultTableModel tableModel; // Modelo para la tabla de subastas
     private JTable tablaLibrosDeseados; // Tabla para mostrar los libros deseados
+    private JTable tablaLibrosComprados;    // Tabla para mostar los libros comprados
     private DefaultTableModel librosDeseadosModel; // Modelo para la tabla de libros deseados
+    private DefaultTableModel librosCompradosModel; // Modelo para la tabla de libros comprados
     private JButton eliminarButton; // Botón para eliminar libro
     private JTextField libroEliminarTextField; // Campo de texto para el libro a eliminar
 
@@ -23,8 +25,8 @@ public class CompradorGUI extends JFrame {
 
     public CompradorGUI(Comprador comprador) {
         this.comprador = comprador;
-        setTitle("Interfaz Comprador");
-        setSize(600, 600); // Ajustamos el tamaño para acomodar ambas tablas
+        setTitle(this.comprador.getLocalName());
+        setSize(800, 600); // Ajustamos el tamaño para acomodar ambas tablas
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null); // Centrar la ventana en la pantalla
 
@@ -51,10 +53,10 @@ public class CompradorGUI extends JFrame {
         JPanel panelSubastas = new JPanel();
         panelSubastas.setLayout(new GridLayout(1, 3));
         panelSubastas.add(new JLabel(" "));
-        panelSubastas.add(new JLabel("        LISTA DE SUBASTAS"));
+        panelSubastas.add(new JLabel("                 SUBASTAS ACTIVAS"));
         panelSubastas.add(new JLabel(" "));
         JPanel panelSubastas2 = new JPanel();
-        panelSubastas2.setLayout(new GridLayout(2, 1));
+        panelSubastas2.setLayout(new BoxLayout(panelSubastas2, BoxLayout.Y_AXIS));
         panelSubastas2.add(panelSubastas);
         panelSubastas2.add(scrollPaneTablaSubastas);
 
@@ -63,17 +65,44 @@ public class CompradorGUI extends JFrame {
         librosDeseadosModel.addColumn("Libro");
         librosDeseadosModel.addColumn("Precio Máximo");
 
+        // Crear el modelo de la tabla de libros comprados
+        librosCompradosModel = new DefaultTableModel();
+        librosCompradosModel.addColumn("Libro");
+        librosCompradosModel.addColumn("Precio");
+
         // Crear la tabla de libros deseados
         tablaLibrosDeseados = new JTable(librosDeseadosModel);
         JScrollPane scrollPaneTablaLibrosDeseados = new JScrollPane(tablaLibrosDeseados);
+        JPanel panelLibrosDeseados = new JPanel();
+        panelLibrosDeseados.setLayout(new GridLayout(1, 3));
+        panelLibrosDeseados.add(new JLabel(" "));
+        panelLibrosDeseados.add(new JLabel("                 LIBROS DESEADOS"));
+        panelLibrosDeseados.add(new JLabel(" "));
+        JPanel panelLibrosDeseados2 = new JPanel();
+        panelLibrosDeseados2.setLayout(new BoxLayout(panelLibrosDeseados2, BoxLayout.Y_AXIS));
+        panelLibrosDeseados2.add(panelLibrosDeseados);
+        panelLibrosDeseados2.add(scrollPaneTablaLibrosDeseados);
+
+        // Crear la tabla de libros comprados
+        tablaLibrosComprados = new JTable(librosCompradosModel);
+        JScrollPane scrollPaneTablaLibrosComprados = new JScrollPane(tablaLibrosComprados);
+        JPanel panelLibrosComprados = new JPanel();
+        panelLibrosComprados.setLayout(new GridLayout(1, 3));
+        panelLibrosComprados.add(new JLabel(" "));
+        panelLibrosComprados.add(new JLabel("                  LIBROS COMPRADOS"));
+        panelLibrosComprados.add(new JLabel(" "));
+        JPanel panelLibrosComprados2 = new JPanel();
+        panelLibrosComprados2.setLayout(new BoxLayout(panelLibrosComprados2, BoxLayout.Y_AXIS));
+        panelLibrosComprados2.add(panelLibrosComprados);
+        panelLibrosComprados2.add(scrollPaneTablaLibrosComprados);
 
         // Crear el layout
         setLayout(new BorderLayout()); // Usamos BorderLayout para dividir el espacio
 
         JPanel panelFormulario = new JPanel();
-        panelFormulario.setLayout(new GridLayout(9, 3)); // Usamos GridLayout para los campos y botones
+        panelFormulario.setLayout(new GridLayout(8, 3)); // Usamos GridLayout para los campos y botones
         panelFormulario.add(new JLabel(" "));
-        panelFormulario.add(new JLabel("        GESTIÓN DE LIBROS"));
+        panelFormulario.add(new JLabel("                GESTIÓN DE LIBROS"));
         panelFormulario.add(new JLabel(" "));
         panelFormulario.add(new JLabel("Libro nuevo:"));
         panelFormulario.add(libroTextField);
@@ -96,15 +125,13 @@ public class CompradorGUI extends JFrame {
         panelFormulario.add(new JLabel(" "));
         panelFormulario.add(new JLabel(" "));
         panelFormulario.add(new JLabel(" "));
-        panelFormulario.add(new JLabel(" "));
-        panelFormulario.add(new JLabel("          LISTA DE LIBROS"));
-        panelFormulario.add(new JLabel(" "));
 
         // Panel para las tablas
         JPanel panelTablas = new JPanel();
-        panelTablas.setLayout(new GridLayout(2, 1)); // Usamos GridLayout para apilar las tablas
-        panelTablas.add(scrollPaneTablaLibrosDeseados);
+        panelTablas.setLayout(new GridLayout(3, 1)); // Usamos GridLayout para apilar las tablas
+        panelTablas.add(panelLibrosDeseados2);
         panelTablas.add(panelSubastas2);
+        panelTablas.add(panelLibrosComprados2);
 
         add(panelFormulario, BorderLayout.NORTH); // Agregamos el formulario arriba de la ventana
         add(panelTablas, BorderLayout.CENTER); // Agregamos las tablas al centro
@@ -217,4 +244,14 @@ public class CompradorGUI extends JFrame {
             librosDeseadosModel.addRow(new Object[]{libro, precioMaximo});
         }
     }
+
+    public void actualizarTablaComprados(Map<String, Integer> comprados) {
+        librosCompradosModel.setRowCount(0);
+        for (Map.Entry<String, Integer> entry : comprados.entrySet()) {
+            String libro = entry.getKey();
+            int precio = entry.getValue();
+            librosCompradosModel.addRow(new Object[]{libro, precio});
+        }
+    }
+
 }

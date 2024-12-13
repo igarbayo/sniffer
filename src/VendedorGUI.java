@@ -18,8 +18,8 @@ public class VendedorGUI extends JFrame {
 
     public VendedorGUI(Vendedor vendedor, List<DataVendedor> subastasData) {
         this.vendedor = vendedor;
-        setTitle("Interfaz Vendedor");
-        setSize(600, 400); // Aseguramos que haya espacio para la tabla y los campos
+        setTitle(this.vendedor.getLocalName());
+        setSize(800, 400); // Aseguramos que haya espacio para la tabla y los campos
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null); // Centrar la ventana en la pantalla
 
@@ -78,10 +78,13 @@ public class VendedorGUI extends JFrame {
 
         // Crear el layout con BoxLayout para la parte superior
         JPanel panelSuperior = new JPanel();
-        panelSuperior.setLayout(new GridLayout(5, 3)); // Apilar los componentes verticalmente
-        panelSuperior.setAlignmentX(Component.LEFT_ALIGNMENT); // Alineación a la izquierda
+        panelSuperior.setLayout(new GridLayout(6, 3)); // Apilar los componentes verticalmente
+        panelSuperior.setAlignmentX(Component.CENTER_ALIGNMENT); // Alineación a la izquierda
 
         // Agregar los componentes de los campos de entrada y el botón
+        panelSuperior.add(new JLabel(" "));
+        panelSuperior.add(new JLabel("              GESTIÓN DE SUBASTAS"));
+        panelSuperior.add(new JLabel(" "));
         panelSuperior.add(new JLabel("Libro:"));
         panelSuperior.add(libroTextField);
         panelSuperior.add(new JLabel(" "));
@@ -95,7 +98,7 @@ public class VendedorGUI extends JFrame {
         panelSuperior.add(new JLabel(" "));
         panelSuperior.add(new JLabel(" "));
         panelSuperior.add(new JLabel(" "));
-        panelSuperior.add(new JLabel("      LISTA DE SUBASTAS"));
+        panelSuperior.add(new JLabel("                  SUBASTAS ACTIVAS"));
         panelSuperior.add(new JLabel(" "));
 
         // Agregar la tabla
