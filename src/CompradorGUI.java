@@ -26,7 +26,7 @@ public class CompradorGUI extends JFrame {
     public CompradorGUI(Comprador comprador) {
         this.comprador = comprador;
         setTitle(this.comprador.getLocalName());
-        setSize(800, 600); // Ajustamos el tamaño para acomodar ambas tablas
+        setSize(600, 500); // Ajustamos el tamaño para acomodar ambas tablas
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null); // Centrar la ventana en la pantalla
 
@@ -53,7 +53,7 @@ public class CompradorGUI extends JFrame {
         JPanel panelSubastas = new JPanel();
         panelSubastas.setLayout(new GridLayout(1, 3));
         panelSubastas.add(new JLabel(" "));
-        panelSubastas.add(new JLabel("                 SUBASTAS ACTIVAS"));
+        panelSubastas.add(new JLabel("          SUBASTAS ACTIVAS"));
         panelSubastas.add(new JLabel(" "));
         JPanel panelSubastas2 = new JPanel();
         panelSubastas2.setLayout(new BoxLayout(panelSubastas2, BoxLayout.Y_AXIS));
@@ -76,7 +76,7 @@ public class CompradorGUI extends JFrame {
         JPanel panelLibrosDeseados = new JPanel();
         panelLibrosDeseados.setLayout(new GridLayout(1, 3));
         panelLibrosDeseados.add(new JLabel(" "));
-        panelLibrosDeseados.add(new JLabel("                 LIBROS DESEADOS"));
+        panelLibrosDeseados.add(new JLabel("           LIBROS DESEADOS"));
         panelLibrosDeseados.add(new JLabel(" "));
         JPanel panelLibrosDeseados2 = new JPanel();
         panelLibrosDeseados2.setLayout(new BoxLayout(panelLibrosDeseados2, BoxLayout.Y_AXIS));
@@ -89,7 +89,7 @@ public class CompradorGUI extends JFrame {
         JPanel panelLibrosComprados = new JPanel();
         panelLibrosComprados.setLayout(new GridLayout(1, 3));
         panelLibrosComprados.add(new JLabel(" "));
-        panelLibrosComprados.add(new JLabel("                  LIBROS COMPRADOS"));
+        panelLibrosComprados.add(new JLabel("         LIBROS COMPRADOS"));
         panelLibrosComprados.add(new JLabel(" "));
         JPanel panelLibrosComprados2 = new JPanel();
         panelLibrosComprados2.setLayout(new BoxLayout(panelLibrosComprados2, BoxLayout.Y_AXIS));
@@ -102,7 +102,7 @@ public class CompradorGUI extends JFrame {
         JPanel panelFormulario = new JPanel();
         panelFormulario.setLayout(new GridLayout(8, 3)); // Usamos GridLayout para los campos y botones
         panelFormulario.add(new JLabel(" "));
-        panelFormulario.add(new JLabel("                GESTIÓN DE LIBROS"));
+        panelFormulario.add(new JLabel("         GESTIÓN DE LIBROS"));
         panelFormulario.add(new JLabel(" "));
         panelFormulario.add(new JLabel("Libro nuevo:"));
         panelFormulario.add(libroTextField);

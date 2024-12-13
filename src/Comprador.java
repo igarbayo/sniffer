@@ -1,3 +1,7 @@
+import jade.content.ContentManager;
+import jade.content.lang.Codec;
+import jade.content.lang.sl.SLCodec;
+import jade.content.onto.Ontology;
 import jade.core.Agent;
 import jade.core.AID;
 import jade.core.behaviours.CyclicBehaviour;
@@ -7,6 +11,7 @@ import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
+import simplejadeabstractontology.ontology.SimpleJADEAbstractOntologyOntology;
 
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +19,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class Comprador extends Agent {
+    // Atributos para la ontologia
+    private ContentManager manager = (ContentManager) getContentManager();
+    private Codec codec = new SLCodec();
+    private Ontology ontology = SimpleJADEAbstractOntologyOntology.getInstance();
+
+    // Atributos
     private Map<String, Integer> librosDeseados = new HashMap<>();
     private Map<String, Integer> librosComprados = new HashMap<>();
     private Map<String, EscucharSubastasBehaviour> subastasActivas  = new HashMap<>();
@@ -56,6 +67,8 @@ public class Comprador extends Agent {
     public boolean eliminarLibro(String libro) {
         if (librosDeseados.containsKey(libro)) {
             librosDeseados.remove(libro);
+            removeBehaviour(subastasActivas.get(libro));
+            subastasActivas.remove(libro);
             return true;
         }
         return false;
@@ -69,7 +82,6 @@ public class Comprador extends Agent {
                 if (!behaviour.isEsGanadorActual()) {
                     removeBehaviour(behaviour);
                     subastasActivas.remove(libro);
-                    gui.actualizarTabla(obtenerSubastasData());
                     return true;
                 }
             }
@@ -79,13 +91,13 @@ public class Comprador extends Agent {
 
     @Override
     protected void setup() {
+        // Registro de la ontología
+        manager.registerLanguage(codec);
+        manager.registerOntology(ontology);
+
         gui = new CompradorGUI(this);
         // Suscribir al DFService
         suscribirDF();
-
-        //System.out.println("Comprador listo para participar en subastas.");
-
-        //anadirLibro("LibroX", 70);
     }
 
     @Override
@@ -181,15 +193,22 @@ public class Comprador extends Agent {
                 int precioRecibido = Integer.parseInt(partes[4]);  // El precio de la subasta
 
                 // Verificar si el libro está en la lista de compras y si el precio está dentro del presupuesto
-                if (libro.equals(libroRecibido) && max >= precioRecibido) {
+                if (libro.equals(libroRecibido) && max >= precioRecibido &&
+                        System.currentTimeMillis() < mensajeCFP.getReplyByDate().getTime()) {
                     // Enviar una respuesta "propose"
                     ACLMessage mensajePropuesta = new ACLMessage(ACLMessage.PROPOSE);
                     mensajePropuesta.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
-                    mensajePropuesta.setContent("Estoy interesado en el libro " + libroRecibido + " por " + precioRecibido);
+                    mensajePropuesta.setContent(libroRecibido + " " + precioRecibido);
                     send(mensajePropuesta);
                     System.out.println("[C]\tEnviado 'propose' al vendedor por el libro: " + libroRecibido + " | " + precioRecibido);
                 } else {
-                    System.out.println("nada");
+                    if (System.currentTimeMillis() < mensajeCFP.getReplyByDate().getTime()) {
+                        ACLMessage mensajeNU = new ACLMessage(ACLMessage.NOT_UNDERSTOOD);
+                        mensajeNU.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
+                        mensajeNU.setContent(libroRecibido);
+                        send(mensajeNU);
+                    }
+                    System.out.println("NU");
                 }
             }
 
@@ -217,35 +236,48 @@ public class Comprador extends Agent {
                 }
             }
 
-            // Esperar un mensaje de tipo "REQUEST"
-            MessageTemplate request = MessageTemplate.MatchPerformative(ACLMessage.REQUEST);
-            ACLMessage mensajeREQUEST = myAgent.receive(request);
-            if (mensajeREQUEST != null) {
-                String contenidoREQUEST = mensajeREQUEST.getContent();
-                if (libro.equals(contenidoREQUEST.split(" ")[2])) {
-                    esGanadorActual = false;
-                    abandonarSubasta(libro);
-                    precioActual = Integer.parseInt(contenidoREQUEST.split(" ")[4]);
-                    librosComprados.put(libro, precioActual);
-                    librosDeseados.remove(libro);
-                    gui.actualizarTabla(obtenerSubastasData());
-                    gui.actualizarTablaLibrosDeseados(getLibrosDeseados());
-                    gui.actualizarTablaComprados(getLibrosComprados());
-                    return;
-                }
-            }
-
             // Esperar un mensaje de tipo "INFORM"
             MessageTemplate inform = MessageTemplate.MatchPerformative(ACLMessage.INFORM);
             ACLMessage mensajeINFORM = myAgent.receive(inform);
             if (mensajeINFORM != null) {
+                System.out.println("Recibido INFORM");
+                System.out.println(mensajeINFORM.getContent());
                 String contenidoINFORM = mensajeINFORM.getContent();
                 if (contenidoINFORM.split(" ")[0].equals("FIN")) {
-                    abandonarSubasta(libro);
-                    precioActual = Integer.parseInt(contenidoINFORM.split(" ")[7]);
+                    if (!contenidoINFORM.split(" ")[1].equals(getLocalName())) {
+                        abandonarSubasta(libro);
+                    }
+                    precioActual = Integer.parseInt(contenidoINFORM.split(" ")[3]);
                     gui.actualizarTabla(obtenerSubastasData());
+                    System.out.println(contenidoINFORM.split(" ")[1]);
+                    System.out.println(getLocalName());
                 }
             }
+
+            // Esperar un mensaje de tipo "REQUEST"
+            MessageTemplate request = MessageTemplate.MatchPerformative(ACLMessage.REQUEST);
+            if (myAgent != null) {
+                ACLMessage mensajeREQUEST = myAgent.receive(request);
+                if (mensajeREQUEST != null) {
+                    System.out.println("Recibido REQUEST");
+                    String contenidoREQUEST = mensajeREQUEST.getContent();
+                    if (libro.equals(contenidoREQUEST.split(" ")[1]) && getLocalName().equals(contenidoREQUEST.split(" ")[0])) {
+                        esGanadorActual = false;
+                        abandonarSubasta(libro);
+                        precioActual = Integer.parseInt(contenidoREQUEST.split(" ")[2]);
+                        librosComprados.put(libro, precioActual);
+                        librosDeseados.remove(libro);
+                        gui.actualizarTabla(obtenerSubastasData());
+                        gui.actualizarTablaLibrosDeseados(getLibrosDeseados());
+                        gui.actualizarTablaComprados(getLibrosComprados());
+                        return;
+                    }
+                }
+            }
+
+
+
+
         }
     }
 }
