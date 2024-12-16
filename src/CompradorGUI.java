@@ -202,7 +202,7 @@ public class CompradorGUI extends JFrame {
                 }
 
                 // Llamar al método abandonarSubasta del comprador
-                boolean resultado = comprador.abandonarSubasta(libro);
+                boolean resultado = comprador.eliminarLibro(libro);
 
                 if (resultado) {
                     actualizarTablaLibrosDeseados(comprador.getLibrosDeseados());

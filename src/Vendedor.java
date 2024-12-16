@@ -5,8 +5,10 @@ import jade.content.lang.sl.SLCodec;
 import jade.content.onto.Ontology;
 import jade.content.onto.basic.Action;
 import jade.core.Agent;
+import jade.core.behaviours.Behaviour;
 import jade.core.behaviours.CyclicBehaviour;
 import jade.core.AID;
+import jade.core.behaviours.ParallelBehaviour;
 import jade.core.behaviours.TickerBehaviour;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
@@ -21,6 +23,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Vendedor extends Agent {
+    // Atributo para múltiples comportamientos paralelos
+    private ParallelBehaviour parallelBehaviour;
+    // Crear un comportamiento vacío que nunca termine
+    Behaviour comportamientoVacio = new CyclicBehaviour() {
+        @Override
+        public void action() {
+            // El comportamiento simplemente se bloquea para que no termine nunca
+            block(); // Se bloquea indefinidamente
+        }
+    };
+
     // Atributos para la ontologia
     private ContentManager manager = (ContentManager) getContentManager();
     private Codec codec = new SLCodec();
@@ -47,7 +60,7 @@ public class Vendedor extends Agent {
             libros.put(libro, new PrecioIncremento(precio, incremento));
             SubastaBehaviour behaviour = new SubastaBehaviour(this, libro, precio, incremento);
             subastasActivas.put(libro, behaviour);
-            addBehaviour(behaviour);
+            parallelBehaviour.addSubBehaviour(behaviour);
         }
     }
 
@@ -56,7 +69,7 @@ public class Vendedor extends Agent {
             libros.remove(libro);
             SubastaBehaviour behaviour = subastasActivas.get(libro);
             if (behaviour != null) {
-                removeBehaviour(behaviour);
+                parallelBehaviour.removeSubBehaviour(behaviour);
                 subastasActivas.remove(libro);
             }
         }
@@ -65,6 +78,20 @@ public class Vendedor extends Agent {
 
     @Override
     protected void setup() {
+        // Crear un ParallelBehaviour para ejecutar múltiples comportamientos en paralelo
+        parallelBehaviour = new ParallelBehaviour(ParallelBehaviour.WHEN_ALL) {
+            @Override
+            public int onEnd() {
+                System.out.println("[" + getLocalName() + "] Todos los subcomportamientos han terminado.");
+                return super.onEnd();
+            }
+        };
+        // Agregar el ParallelBehaviour al agente
+        addBehaviour(parallelBehaviour);
+
+        // Agregar el comportamiento vacío al ParallelBehaviour
+        parallelBehaviour.addSubBehaviour(comportamientoVacio);
+
         // Registro de la ontología
         manager.registerLanguage(codec);
         manager.registerOntology(ontology);
@@ -183,7 +210,7 @@ public class Vendedor extends Agent {
                             send(accept);
 
                             // Print de debug
-                            System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
+                            //System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -206,7 +233,7 @@ public class Vendedor extends Agent {
                                     Action action = new Action(getAID(), mensaje);
                                     manager.fillContent(reject, action);
                                     send(reject);
-                                    System.out.println("[V]\tEnviado 'reject-proposal' a " + comprador.getName());
+                                    //System.out.println("[V]\tEnviado 'reject-proposal' a " + comprador.getName());
                                 }
                             }
                         } catch (Exception e) {
@@ -220,7 +247,7 @@ public class Vendedor extends Agent {
                         precio += incremento;
 
                         // Print de debug
-                        System.out.println("[V]\tPrecio incrementado a: " + precio);
+                        //System.out.println("[V]\tPrecio incrementado a: " + precio);
                     }
                 // Si solo ha respondido 1 persona
                 } else if (listaRespondedores.size()==1){
@@ -248,7 +275,7 @@ public class Vendedor extends Agent {
                             send(accept);
 
                             // Print de debug
-                            System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
+                            //System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -296,7 +323,7 @@ public class Vendedor extends Agent {
                     send(startAuctionMessage);
 
                     // Print para debug
-                    System.out.println("[V]\tEnviado 'inform-start-of-auction'.");
+                    //System.out.println("[V]\tEnviado 'inform-start-of-auction'.");
 
                     // Terminamos la primera ronda
                     primeraRonda = false;
@@ -331,11 +358,15 @@ public class Vendedor extends Agent {
                         cfProposal.setReplyByDate(replyByDate);
 
                         cfProposal.addReceiver(comprador);
+
+                        // Print para debug
+                        System.out.println("[" + getLocalName() + "] CFP de " + mensaje.getLibro());
+
                         send(cfProposal);
                     }
 
                     // Print para debug
-                    System.out.println("[V]\tEnviado 'call-for-proposal' a " + compradores.size() + " compradores.");
+                    //System.out.println("[V]\tEnviado 'call-for-proposal' a " + compradores.size() + " compradores.");
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -365,7 +396,7 @@ public class Vendedor extends Agent {
                             send(informFinal);
 
                             // Print para debug
-                            System.out.println("Enviado INFORM final");
+                            System.out.println("[" + getLocalName() + "] Enviado INFORM final");
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -401,9 +432,9 @@ public class Vendedor extends Agent {
 
                     // Actualizamos la tabla de subastas
                     gui.actualizarTabla(obtenerSubastasData());
-                    stop();
                 }
             }
+            parallelBehaviour.addSubBehaviour(comportamientoVacio);
         }
 
         /**
