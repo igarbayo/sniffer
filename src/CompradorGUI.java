@@ -219,7 +219,9 @@ public class CompradorGUI extends JFrame {
 
     public void actualizarTabla(List<DataComprador> compradoresData) {
         // Limpiar la tabla de subastas antes de agregar nuevos datos
-        tableModel.setRowCount(0);
+        if (tableModel.getRowCount() > 0) {
+            tableModel.setRowCount(0);
+        }
 
         // Iterar sobre la lista de compradores y agregar una fila por cada comprador
         for (DataComprador data : compradoresData) {
@@ -235,7 +237,9 @@ public class CompradorGUI extends JFrame {
 
     public void actualizarTablaLibrosDeseados(Map<String, Integer> librosDeseados) {
         // Limpiar la tabla de libros deseados antes de agregar nuevos datos
-        librosDeseadosModel.setRowCount(0);
+        if (librosDeseadosModel.getRowCount() > 0) {
+            librosDeseadosModel.setRowCount(0);
+        }
 
         // Iterar sobre el mapa y agregar una fila por cada entrada
         for (Map.Entry<String, Integer> entry : librosDeseados.entrySet()) {
@@ -246,7 +250,9 @@ public class CompradorGUI extends JFrame {
     }
 
     public void actualizarTablaComprados(Map<String, Integer> comprados) {
-        librosCompradosModel.setRowCount(0);
+        if (librosCompradosModel.getRowCount() > 0) {
+            librosCompradosModel.setRowCount(0);
+        }
         for (Map.Entry<String, Integer> entry : comprados.entrySet()) {
             String libro = entry.getKey();
             int precio = entry.getValue();

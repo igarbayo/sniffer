@@ -1,7 +1,9 @@
+import jade.content.ContentElement;
 import jade.content.ContentManager;
 import jade.content.lang.Codec;
 import jade.content.lang.sl.SLCodec;
 import jade.content.onto.Ontology;
+import jade.content.onto.basic.Action;
 import jade.core.Agent;
 import jade.core.behaviours.CyclicBehaviour;
 import jade.core.AID;
@@ -11,7 +13,9 @@ import jade.domain.FIPAException;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.domain.FIPAAgentManagement.*;
+import simplejadeabstractontology.ontology.Mensaje;
 import simplejadeabstractontology.ontology.SimpleJADEAbstractOntologyOntology;
+import simplejadeabstractontology.ontology.impl.DefaultMensaje;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -85,7 +89,7 @@ public class Vendedor extends Agent {
         private int precio;
         private int incremento;
         private AID ganador = null;
-        private int numRespondedores = 0;
+        List<AID> listaRespondedores = new ArrayList<>();
         private boolean primeraRonda = true; // Para enviar el mensaje inicial solo una vez
         private boolean ultimaRonda = false; // Para terminar
 
@@ -102,7 +106,7 @@ public class Vendedor extends Agent {
         }
 
         public int getNumRespondedores() {
-            return numRespondedores;
+            return listaRespondedores.size();
         }
 
         public SubastaBehaviour(Agent a, String libro, int precio, int incremento) {
@@ -117,7 +121,7 @@ public class Vendedor extends Agent {
         @Override
         protected void onTick() {
 
-            List<AID> respondedores = new ArrayList<>();
+            listaRespondedores.clear();
 
             /* PROCESAMIENTO DE RESPUESTAS */
             if (!ultimaRonda) {
@@ -126,60 +130,138 @@ public class Vendedor extends Agent {
                 ACLMessage reply = receive(mt);
 
                 while (reply != null) {
-                    // SOlo se procesan los propose que referidos al libro y precio fijados
-                    if (libro.equals(reply.getContent().split(" ")[0]) &&
-                            precio == Integer.parseInt(reply.getContent().split(" ")[1])) {
-                        respondedores.add(reply.getSender());
-                        if (ganador == null) {
-                            ganador = reply.getSender(); // El primero en responder es el ganador
-                        }
-                    }
-                    reply = receive(mt); // Recibir el siguiente mensaje
-                }
-
-                numRespondedores = respondedores.size();
-                gui.actualizarTabla(obtenerSubastasData());
-
-                if (numRespondedores>=2) {
-                    ganador = respondedores.get(0);
-                    if (ganador != null) {
-                        // Enviar ACCEPT_PROPOSAL al ganador
-                        ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
-                        accept.addReceiver(ganador);
-                        accept.setContent(libro + " " + precio);
-                        send(accept);
-                        System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
-
-                        // Enviar REJECT_PROPOSAL a los demás
-                        for (AID comprador : respondedores) {
-                            if (!comprador.equals(ganador)) {
-                                ACLMessage reject = new ACLMessage(ACLMessage.REJECT_PROPOSAL);
-                                reject.addReceiver(comprador);
-                                reject.setContent(libro + " " + precio);
-                                send(reject);
-                                System.out.println("[V]\tEnviado 'reject-proposal' a " + comprador.getName());
+                    // Comprobaciones de la ontología
+                    try {
+                        ContentElement contenido = manager.extractContent(reply);
+                        if (contenido instanceof Action) {
+                            Action action = (Action) contenido;
+                            Object objeto = action.getAction();
+                            if (objeto instanceof DefaultMensaje) {
+                                Mensaje mensajeRecibido = (Mensaje) objeto;
+                                // Solo se procesan los propose que referidos al libro y precio fijados
+                                if (libro.equals(mensajeRecibido.getLibro()) &&
+                                        precio == mensajeRecibido.getPrecio()) {
+                                    listaRespondedores.add(reply.getSender());
+                                    if (ganador == null) {
+                                        ganador = reply.getSender(); // El primero en responder es el ganador
+                                    }
+                                }
                             }
                         }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    // Recibir el siguiente mensaje
+                    reply = receive(mt);
+                }
+
+                // Actualizamos la tabla de subastas
+                gui.actualizarTabla(obtenerSubastasData());
+
+                if (listaRespondedores.size()>=2) {
+                    ganador = listaRespondedores.get(0);
+                    if (ganador != null) {
+                        try {
+                            // Creación del mensaje ontológico
+                            DefaultMensaje mensaje = new DefaultMensaje();
+                            mensaje.setDestinatario(ganador.getLocalName());
+                            mensaje.setLibro(libro);
+                            mensaje.setPrecio(precio);
+                            mensaje.setFin(false);
+
+                            // Enviar ACCEPT_PROPOSAL al ganador
+                            ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
+                            accept.addReceiver(ganador);
+                            accept.setLanguage(codec.getName());
+                            accept.setOntology(ontology.getName());
+
+                            // Envolver el objeto mensaje en una acción
+                            Action action = new Action(getAID(), mensaje);
+
+                            // Serializar el contenido ontológico en el mensaje
+                            manager.fillContent(accept, action);
+                            send(accept);
+
+                            // Print de debug
+                            System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        try {
+                            // Enviar REJECT_PROPOSAL a los demás
+                            for (AID comprador : listaRespondedores) {
+                                // Creación del mensaje ontológico
+                                DefaultMensaje mensaje = new DefaultMensaje();
+                                mensaje.setLibro(libro);
+                                mensaje.setPrecio(precio);
+                                mensaje.setFin(false);
+                                mensaje.setDestinatario(comprador.getLocalName());
+
+                                if (!comprador.equals(ganador)) {
+                                    ACLMessage reject = new ACLMessage(ACLMessage.REJECT_PROPOSAL);
+                                    reject.addReceiver(comprador);
+                                    reject.setLanguage(codec.getName());
+                                    reject.setOntology(ontology.getName());
+                                    Action action = new Action(getAID(), mensaje);
+                                    manager.fillContent(reject, action);
+                                    send(reject);
+                                    System.out.println("[V]\tEnviado 'reject-proposal' a " + comprador.getName());
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        // Actualizamos la tabla de subastas
                         gui.actualizarTabla(obtenerSubastasData());
+
                         // Incrementar precio para la próxima ronda
                         precio += incremento;
+
+                        // Print de debug
                         System.out.println("[V]\tPrecio incrementado a: " + precio);
                     }
-                } else if (numRespondedores==1){
-                    ganador = respondedores.get(0);
-                    // Enviar ACCEPT_PROPOSAL al ganador
-                    ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
-                    accept.addReceiver(ganador);
-                    accept.setContent(libro + " " + precio);
-                    send(accept);
-                    System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
+                // Si solo ha respondido 1 persona
+                } else if (listaRespondedores.size()==1){
+                    ganador = listaRespondedores.get(0);
+                    if (ganador!=null) {
+                        try {
+                            // Creación del mensaje ontológico
+                            DefaultMensaje mensaje = new DefaultMensaje();
+                            mensaje.setDestinatario(ganador.getLocalName());
+                            mensaje.setLibro(libro);
+                            mensaje.setPrecio(precio);
+                            mensaje.setFin(false);
+
+                            // Enviar ACCEPT_PROPOSAL al ganador
+                            ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
+                            accept.addReceiver(ganador);
+                            accept.setLanguage(codec.getName());
+                            accept.setOntology(ontology.getName());
+
+                            // Envolver el objeto mensaje en una acción
+                            Action action = new Action(getAID(), mensaje);
+
+                            // Serializar el contenido ontológico en el mensaje
+                            manager.fillContent(accept, action);
+                            send(accept);
+
+                            // Print de debug
+                            System.out.println("[V]\tEnviado 'accept-proposal' a " + ganador.getName());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
                     // pasamos a la última ronda
                     ultimaRonda = true;
                 } // si numRespondedores==0, se sigue lanzando la peticion sin incrementar el precio
                   // si aún no hay ganador
+                // Si, por el contrario, ya hay ganador
                 else if (ganador!=null) {
                     // Reducimos al precio de la ronda anterior
                     precio -= incremento;
+                    // Pasamos a la última ronda
                     ultimaRonda = true;
                 }
             }
@@ -197,69 +279,137 @@ public class Vendedor extends Agent {
 
             /* INFORM PARA LA PRIMERA RONDA */
             if (primeraRonda) {
-                // Enviar mensaje inicial informando el inicio de la subasta
-                ACLMessage startAuctionMessage = new ACLMessage(ACLMessage.INFORM);
-                startAuctionMessage.setContent("La subasta de " + libro + " está a punto de comenzar.");
-                for (AID comprador : compradores) {
-                    startAuctionMessage.addReceiver(comprador);
+                try {
+                    // Contenido ontológico
+                    DefaultMensaje mensaje = new DefaultMensaje();
+                    mensaje.setLibro(libro);
+
+                    // Enviar mensaje inicial informando el inicio de la subasta
+                    ACLMessage startAuctionMessage = new ACLMessage(ACLMessage.INFORM);
+                    for (AID comprador : compradores) {
+                        startAuctionMessage.addReceiver(comprador);
+                    }
+                    startAuctionMessage.setLanguage(codec.getName());
+                    startAuctionMessage.setOntology(ontology.getName());
+                    Action action = new Action(getAID(), mensaje);
+                    manager.fillContent(startAuctionMessage, action);
+                    send(startAuctionMessage);
+
+                    // Print para debug
+                    System.out.println("[V]\tEnviado 'inform-start-of-auction'.");
+
+                    // Terminamos la primera ronda
+                    primeraRonda = false;
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-                send(startAuctionMessage);
-                System.out.println("[V]\tEnviado 'inform-start-of-auction'.");
-                primeraRonda = false;
+
             }
 
             /* CFP GENERAL */
             if (!ultimaRonda) {
-                // Enviar "call-for-proposal" a todos los compradores
-                ACLMessage cfProposal = new ACLMessage(ACLMessage.CFP);
-                cfProposal.setContent("Subasta de " + libro + " por " + precio);
+                try {
+                    // Añadimos a todos los compradores
+                    for (AID comprador : compradores) {
+                        DefaultMensaje mensaje = new DefaultMensaje();
+                        mensaje.setLibro(libro);
+                        mensaje.setPrecio(precio);
+                        mensaje.setDestinatario(comprador.getLocalName());
 
-                // Establecer fecha límite de respuesta
-                Calendar calendar = Calendar.getInstance();
-                calendar.add(Calendar.SECOND, 10);
-                Date replyByDate = calendar.getTime();
-                cfProposal.setReplyByDate(replyByDate);
+                        // Enviar "call-for-proposal" a todos los compradores
+                        ACLMessage cfProposal = new ACLMessage(ACLMessage.CFP);
+                        cfProposal.setOntology(ontology.getName());
+                        cfProposal.setLanguage(codec.getName());
 
-                for (AID comprador : compradores) {
-                    cfProposal.addReceiver(comprador);
+                        Action action = new Action(getAID(), mensaje);
+                        manager.fillContent(cfProposal, action);
+
+                        // Establecer fecha límite de respuesta
+                        Calendar calendar = Calendar.getInstance();
+                        calendar.add(Calendar.SECOND, 10);
+                        Date replyByDate = calendar.getTime();
+                        cfProposal.setReplyByDate(replyByDate);
+
+                        cfProposal.addReceiver(comprador);
+                        send(cfProposal);
+                    }
+
+                    // Print para debug
+                    System.out.println("[V]\tEnviado 'call-for-proposal' a " + compradores.size() + " compradores.");
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-                send(cfProposal);
-                System.out.println("[V]\tEnviado 'call-for-proposal' a " + compradores.size() + " compradores.");
 
             /* INFORMS Y REQUEST PARA LA ÚLTIMA RONDA */
             } else {
                 if (ganador != null) {
-                    // Se informa a los no ganadores
-                    ACLMessage informFinal = new ACLMessage(ACLMessage.INFORM);
-                    // Establecer el contenido del mensaje
-                    informFinal.setContent("FIN " + ganador.getLocalName() + " " + libro + " " + precio);
-                    // Especificar los receptores del mensaje (en DFService)
-                    for (AID respondedor : respondedores) {
-                        informFinal.addReceiver(respondedor);
+                    try {
+                        // Especificar los receptores del mensaje (en DFService)
+                        for (AID comprador : compradores) {
+                            DefaultMensaje mensaje = new DefaultMensaje();
+                            mensaje.setLibro(libro);
+                            mensaje.setPrecio(precio);
+                            mensaje.setGanador(ganador.getLocalName());
+                            mensaje.setFin(true);
+                            mensaje.setDestinatario(comprador.getLocalName());
+
+                            // Se informa a los no ganadores
+                            ACLMessage informFinal = new ACLMessage(ACLMessage.INFORM);
+
+                            informFinal.addReceiver(comprador);
+                            informFinal.setLanguage(codec.getName());
+                            informFinal.setOntology(ontology.getName());
+                            Action action = new Action(getAID(), mensaje);
+                            manager.fillContent(informFinal, action);
+                            // Enviar el mensaje
+                            send(informFinal);
+
+                            // Print para debug
+                            System.out.println("Enviado INFORM final");
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-                    // Enviar el mensaje
-                    send(informFinal);
 
-                    // Se hace un request al ganador
-                    ACLMessage request = new ACLMessage(ACLMessage.REQUEST);
-                    request.setContent(ganador.getLocalName() + " " + libro + " " + precio);
-                    request.addReceiver(ganador);
-                    send(request);
+                    try {
+                        DefaultMensaje mensaje = new DefaultMensaje();
+                        mensaje.setLibro(libro);
+                        mensaje.setPrecio(precio);
+                        mensaje.setGanador(ganador.getLocalName());
 
-                    // ELiminamos la subasta
+                        // Se hace un request al ganador
+                        ACLMessage request = new ACLMessage(ACLMessage.REQUEST);
+                        request.addReceiver(ganador);
+                        request.setLanguage(codec.getName());
+                        request.setOntology(ontology.getName());
+                        Action action = new Action(getAID(), mensaje);
+                        manager.fillContent(request, action);
+                        send(request);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
+                    // Eliminamos la subasta
                     eliminarLibro(libro);
+
+                    // Actualizamos la tabla de subastas
                     gui.actualizarTabla(obtenerSubastasData());
                     stop();
                 } else {
+                    // Eliminamos la subasta
                     eliminarLibro(libro);
+
+                    // Actualizamos la tabla de subastas
                     gui.actualizarTabla(obtenerSubastasData());
                     stop();
                 }
             }
         }
 
-
-
+        /**
+         * Obtener la lista de compradores suscritos al DFService
+         * @return lista de compradores
+         */
         private List<AID> obtenerCompradores() {
             // Buscar compradores en el DFService
             DFAgentDescription template = new DFAgentDescription();

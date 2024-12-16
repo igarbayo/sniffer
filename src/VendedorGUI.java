@@ -110,7 +110,9 @@ public class VendedorGUI extends JFrame {
 
     public void actualizarTabla(List<DataVendedor> subastasData) {
         // Limpiar la tabla antes de agregar nuevos datos
-        tableModel.setRowCount(0);
+        if (tableModel.getRowCount() > 0) {
+            tableModel.setRowCount(0);
+        }
 
         // Iterar sobre la lista de subastas y agregar una fila por cada subasta
         for (DataVendedor data : subastasData) {

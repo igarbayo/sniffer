@@ -39,7 +39,7 @@ public class SimpleJADEAbstractOntologyOntology extends jade.content.onto.Ontolo
 
     // adding Concept(s)
     ConceptSchema mensajeSchema = new ConceptSchema(MENSAJE);
-    add(mensajeSchema, simplejadeabstractontology.ontology.Mensaje.class);
+    add(mensajeSchema, simplejadeabstractontology.ontology.impl.DefaultMensaje.class);
 
     // adding AgentAction(s)
 
