@@ -1,3 +1,6 @@
+// Ignacio Garbayo Fernández, 2024-2025
+// Prácticas 6/7. Computación Distribuida
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -114,15 +117,18 @@ public class VendedorGUI extends JFrame {
             tableModel.setRowCount(0);
         }
 
-        // Iterar sobre la lista de subastas y agregar una fila por cada subasta
-        for (DataVendedor data : subastasData) {
-            String libro = data.getLibro();
-            int precio = data.getPrecio();
-            String ganador = data.getGanador();
-            int numRespondedores = data.getNumRespondedores();
+        if (!subastasData.isEmpty()) {
+            for (DataVendedor data : subastasData) {
+                String libro = data.getLibro();
+                int precio = data.getPrecio();
+                String ganador = data.getGanador();
+                int numRespondedores = data.getNumRespondedores();
 
-            // Agregar la fila a la tabla
-            tableModel.addRow(new Object[]{libro, precio, ganador, numRespondedores});
+                // Agregar la fila a la tabla
+                tableModel.addRow(new Object[]{libro, precio, ganador, numRespondedores});
+            }
         }
+        // Iterar sobre la lista de subastas y agregar una fila por cada subasta
+
     }
 }

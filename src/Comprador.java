@@ -1,3 +1,6 @@
+// Ignacio Garbayo Fernández, 2024-2025
+// Prácticas 6/7. Computación Distribuida
+
 import jade.content.ContentElement;
 import jade.content.ContentManager;
 import jade.content.lang.Codec;
@@ -5,10 +8,7 @@ import jade.content.lang.sl.SLCodec;
 import jade.content.onto.Ontology;
 import jade.content.onto.basic.Action;
 import jade.core.Agent;
-import jade.core.AID;
-import jade.core.behaviours.Behaviour;
 import jade.core.behaviours.CyclicBehaviour;
-import jade.core.behaviours.ParallelBehaviour;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
@@ -17,24 +17,13 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import simplejadeabstractontology.ontology.SimpleJADEAbstractOntologyOntology;
 import simplejadeabstractontology.ontology.impl.DefaultMensaje;
-
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 public class Comprador extends Agent {
-    // Atributo para manejar múltiples comportamientos
-    private ParallelBehaviour parallelBehaviour;
-    // Crear un comportamiento vacío que nunca termine
-    Behaviour comportamientoVacio = new CyclicBehaviour() {
-        @Override
-        public void action() {
-            // El comportamiento simplemente se bloquea para que no termine nunca
-            block(); // Se bloquea indefinidamente
-        }
-    };
-
     // Atributos para la ontologia
     private ContentManager manager = (ContentManager) getContentManager();
     private Codec codec = new SLCodec();
@@ -43,7 +32,7 @@ public class Comprador extends Agent {
     // Atributos
     private Map<String, Integer> librosDeseados = new HashMap<>();
     private Map<String, Integer> librosComprados = new HashMap<>();
-    private Map<String, EscucharSubastasBehaviour> subastasActivas  = new HashMap<>();
+    private Map<String, PrecioGanador> subastasActivas  = new HashMap<>();
     private CompradorGUI gui;
 
     public Map<String, Integer> getLibrosDeseados() {
@@ -55,22 +44,22 @@ public class Comprador extends Agent {
     }
 
     public List<DataComprador> obtenerSubastasData() {
-        // Convertir las subastas activas de SubastaBehaviour a SubastaData
-        return subastasActivas.values().stream()
-                .map(behaviour -> new DataComprador(
-                        behaviour.getLibro(),
-                        behaviour.getPrecioActual(),
-                        behaviour.isEsGanadorActual()))
+        // Convertir las subastas activas a DataComprador
+        return subastasActivas.keySet().stream()
+                .map(libro -> new DataComprador(
+                        libro, // El campo libro es el key del mapa
+                        subastasActivas.get(libro).getPrecio(), // Obtener el precio del valor asociado al libro
+                        subastasActivas.get(libro).getGanador() // Obtener el ganador del valor asociado al libro
+                ))
                 .collect(Collectors.toList());
     }
+
 
     public void anadirLibro(String libro, int max) {
         if (libro != null && max!= 0) {
             librosDeseados.put(libro, max);
         }
-        EscucharSubastasBehaviour behaviour = new EscucharSubastasBehaviour(this, libro, max);
-        subastasActivas.put(libro, behaviour);
-        parallelBehaviour.addSubBehaviour(behaviour);
+        subastasActivas.put(libro, new PrecioGanador(0, false));
     }
 
     public void comprarLibro(String libro, int precio) {
@@ -82,7 +71,6 @@ public class Comprador extends Agent {
     public boolean eliminarLibro(String libro) {
         if (librosDeseados.containsKey(libro)) {
             librosDeseados.remove(libro);
-            parallelBehaviour.removeSubBehaviour(subastasActivas.get(libro));
             subastasActivas.remove(libro);
             return true;
         }
@@ -91,21 +79,6 @@ public class Comprador extends Agent {
 
     @Override
     protected void setup() {
-        // Inicio del comportamiento paralelo
-        // Crear un ParallelBehaviour para ejecutar múltiples comportamientos en paralelo
-        parallelBehaviour = new ParallelBehaviour(ParallelBehaviour.WHEN_ALL) {
-            @Override
-            public int onEnd() {
-                System.out.println("[ " + getLocalName() + "] Todos los subcomportamientos han terminado.");
-                return super.onEnd();
-            }
-        };
-        // Agregar el ParallelBehaviour al agente
-        addBehaviour(parallelBehaviour);
-
-        // Agregar el comportamiento vacío al ParallelBehaviour
-        parallelBehaviour.addSubBehaviour(comportamientoVacio);
-
         // Registro de la ontología
         manager.registerLanguage(codec);
         manager.registerOntology(ontology);
@@ -113,6 +86,12 @@ public class Comprador extends Agent {
         gui = new CompradorGUI(this);
         // Suscribir al DFService
         suscribirDF();
+
+        addBehaviour(new AcceptBehaviour(this));
+        addBehaviour(new RejectBehaviour(this));
+        addBehaviour(new InformBehaviour(this));
+        addBehaviour(new RequestBehaviour(this));
+        addBehaviour(new CFPBehaviour(this));
     }
 
     @Override
@@ -166,104 +145,18 @@ public class Comprador extends Agent {
         }
     }
 
+    /* DEFINICIÓN DE BEHAVIOURS PARA CADA TIPO DE MENSAJE */
+    /* El mismo tipo de behaviour engloba todas las subastas activas y libros deseados */
 
-    private class EscucharSubastasBehaviour extends CyclicBehaviour {
-        private String libro;
-        private int max;
-        private int precioActual = 0;
-        private boolean esGanadorActual = false;
+    // Mensaje ACCEPT_PROPOSAL
+    private class AcceptBehaviour extends CyclicBehaviour {
 
-        public String getLibro() {
-            return libro;
-        }
-
-        public void setLibro(String libro) {
-            this.libro = libro;
-        }
-
-        public int getPrecioActual() {
-            return precioActual;
-        }
-
-        public boolean isEsGanadorActual() {
-            return esGanadorActual;
-        }
-
-        public EscucharSubastasBehaviour(Agent a, String libro, int max) {
+        public AcceptBehaviour(Agent a) {
             super(a);
-            if (libro!=null) {
-                this.libro = libro;
-            }
-            this.max = max;
         }
 
         @Override
         public void action() {
-
-            // Esperar un mensaje de tipo "call-for-proposal"
-            MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.CFP);
-            ACLMessage mensajeCFP = myAgent.receive(mt);
-
-            if (mensajeCFP != null) {
-                try {
-                    ContentElement contenido = manager.extractContent(mensajeCFP);
-                    if (contenido instanceof Action) {
-                        Action action = (Action) contenido;
-                        Object objeto = action.getAction();
-                        if (objeto instanceof DefaultMensaje) {
-                            DefaultMensaje mensaje = (DefaultMensaje) objeto;
-
-                            if (System.currentTimeMillis() < mensajeCFP.getReplyByDate().getTime()) {
-                                if (getLocalName().equals(mensaje.getDestinatario())) {
-                                    if (libro.equals(mensaje.getLibro())) {
-                                        if (max >= mensaje.getPrecio()) {
-                                            // Creamos el mensaje ontológico
-                                            DefaultMensaje mensajeP = new DefaultMensaje();
-                                            mensajeP.setLibro(mensaje.getLibro());
-                                            mensajeP.setPrecio(mensaje.getPrecio());
-
-                                            // Enviar una respuesta "propose"
-                                            ACLMessage mensajePropuesta = new ACLMessage(ACLMessage.PROPOSE);
-                                            mensajePropuesta.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
-                                            mensajePropuesta.setOntology(ontology.getName());
-                                            mensajePropuesta.setLanguage(codec.getName());
-                                            Action actionP = new Action(getAID(), mensajeP);
-                                            manager.fillContent(mensajePropuesta, actionP);
-                                            send(mensajePropuesta);
-
-                                            // Print para debug
-                                            System.out.println("[" + getLocalName() + "] Enviado 'propose' al vendedor por el libro: "
-                                                    + mensaje.getLibro() + " | " + mensaje.getPrecio());
-                                        } else {
-                                            DefaultMensaje mensajeP = new DefaultMensaje();
-                                            mensajeP.setLibro(mensaje.getLibro());
-                                            ACLMessage mensajeNU = new ACLMessage(ACLMessage.NOT_UNDERSTOOD);
-                                            mensajeNU.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
-                                            mensajeNU.setOntology(ontology.getName());
-                                            mensajeNU.setLanguage(codec.getName());
-                                            Action actionP = new Action(getAID(), mensajeP);
-                                            manager.fillContent(mensajeNU, actionP);
-                                            send(mensajeNU);
-                                            // Print para debug
-                                            System.out.println("[" + getLocalName() + "] El precio es mayor.");
-                                        }
-                                    } else {
-                                        System.out.println("[" + getLocalName() + "] El libro no es igual: " +
-                                                libro + " vs " + mensaje.getLibro());
-                                    }
-                                } else {
-                                    System.out.println("[" + getLocalName() + "] El destinatario no coincide.");
-                                }
-                            } else {
-                                System.out.println("[" + getLocalName() + "] El tiempo ha expirado.");
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-
             // Esperar un mensaje de tipo "ACCEPT_PROPOSAL"
             MessageTemplate acp = MessageTemplate.MatchPerformative(ACLMessage.ACCEPT_PROPOSAL);
             ACLMessage mensajeACP = myAgent.receive(acp);
@@ -275,12 +168,14 @@ public class Comprador extends Agent {
                         Object objeto = action.getAction();
                         if (objeto instanceof DefaultMensaje) {
                             DefaultMensaje mensaje = (DefaultMensaje) objeto;
-                            if (libro.equals(mensaje.getLibro()) && getLocalName().equals(mensaje.getDestinatario())) {
-                                esGanadorActual = true;
-                                precioActual = mensaje.getPrecio();
+                            for (String libro : subastasActivas.keySet()) {
+                                if (libro.equals(mensaje.getLibro()) && getLocalName().equals(mensaje.getDestinatario())) {
+                                    subastasActivas.get(libro).setGanador(true);
+                                    subastasActivas.get(libro).setPrecio(mensaje.getPrecio());
 
-                                // Actualizamos la tabla de subastas
-                                gui.actualizarTabla(obtenerSubastasData());
+                                    // Actualizamos la tabla de subastas
+                                    gui.actualizarTabla(obtenerSubastasData());
+                                }
                             }
                         }
                     }
@@ -288,7 +183,18 @@ public class Comprador extends Agent {
                     e.printStackTrace();
                 }
             }
+        }
+    }
 
+    // Mensaje REJECT_PROPOSAL
+    private class RejectBehaviour extends CyclicBehaviour {
+
+        public RejectBehaviour(Agent a) {
+            super(a);
+        }
+
+        @Override
+        public void action() {
             // Esperar un mensaje de tipo "REJECT_PROPOSAL"
             MessageTemplate rjp = MessageTemplate.MatchPerformative(ACLMessage.REJECT_PROPOSAL);
             ACLMessage mensajeRJP = myAgent.receive(rjp);
@@ -300,12 +206,14 @@ public class Comprador extends Agent {
                         Object objeto = action.getAction();
                         if (objeto instanceof DefaultMensaje) {
                             DefaultMensaje mensaje = (DefaultMensaje) objeto;
-                            if (libro.equals(mensaje.getLibro()) && getLocalName().equals(mensaje.getDestinatario())) {
-                                esGanadorActual = false;
-                                precioActual = mensaje.getPrecio();
+                            for (String libro : subastasActivas.keySet()) {
+                                if (libro.equals(mensaje.getLibro()) && getLocalName().equals(mensaje.getDestinatario())) {
+                                    subastasActivas.get(libro).setGanador(false);
+                                    subastasActivas.get(libro).setPrecio(mensaje.getPrecio());
 
-                                // Actualizamos la tabla de subastas
-                                gui.actualizarTabla(obtenerSubastasData());
+                                    // Actualizamos la tabla de subastas
+                                    gui.actualizarTabla(obtenerSubastasData());
+                                }
                             }
                         }
                     }
@@ -313,7 +221,18 @@ public class Comprador extends Agent {
                     e.printStackTrace();
                 }
             }
+        }
+    }
 
+    // Mensaje INFORM
+    private class InformBehaviour extends CyclicBehaviour {
+
+        public InformBehaviour(Agent a) {
+            super(a);
+        }
+
+        @Override
+        public void action() {
             // Esperar un mensaje de tipo "INFORM"
             MessageTemplate inform = MessageTemplate.MatchPerformative(ACLMessage.INFORM);
             ACLMessage mensajeINFORM = myAgent.receive(inform);
@@ -330,31 +249,45 @@ public class Comprador extends Agent {
                         Object objeto = action.getAction();
                         if (objeto instanceof DefaultMensaje) {
                             DefaultMensaje mensaje = (DefaultMensaje) objeto;
-                            if (mensaje.getFin() && libro.equals(mensaje.getLibro()) &&
-                                getLocalName().equals(mensaje.getDestinatario())) {
-                                if (!mensaje.getGanador().equals(getLocalName())) {
-                                    subastasActivas.remove(libro);
+                            Iterator<String> iterator = subastasActivas.keySet().iterator();
+                            while (iterator.hasNext()) {
+                                String libro = iterator.next();
+                                if (mensaje.getFin() && libro.equals(mensaje.getLibro()) &&
+                                        getLocalName().equals(mensaje.getDestinatario())) {
+                                    if (!mensaje.getGanador().equals(getLocalName())) {
+                                        iterator.remove(); // Elimina el elemento de forma segura
+
+                                        // Print para debug
+                                        System.out.println("[" + getLocalName() + "] Elimino subasta");
+                                    }
+
+                                    // Actualizamos la tabla de subastas
+                                    gui.actualizarTabla(obtenerSubastasData());
 
                                     // Print para debug
-                                    System.out.println("[" + getLocalName() + "] Elimino subasta");
+                                    System.out.println(mensaje.getGanador());
+                                    System.out.println(getLocalName());
                                 }
-                                precioActual = mensaje.getPrecio();
-
-                                // Actualizamos la tabla de subastas
-                                gui.actualizarTabla(obtenerSubastasData());
-
-                                // Print para debug
-                                System.out.println(mensaje.getGanador());
-                                // Print para debug
-                                System.out.println(getLocalName());
                             }
+
                         }
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
+        }
+    }
 
+    // Mensaje REQUEST
+    private class RequestBehaviour extends CyclicBehaviour {
+
+        public RequestBehaviour(Agent a) {
+            super(a);
+        }
+
+        @Override
+        public void action() {
             // Esperar un mensaje de tipo "REQUEST"
             MessageTemplate request = MessageTemplate.MatchPerformative(ACLMessage.REQUEST);
             if (myAgent != null) {
@@ -371,20 +304,29 @@ public class Comprador extends Agent {
                                 // Print para debug
                                 //System.out.println("Recibido REQUEST");
 
-                                if (libro.equals(mensaje.getLibro()) && getLocalName().equals(mensaje.getGanador())) {
-                                    // Actualizaciones necesarias
-                                    esGanadorActual = false;
-                                    precioActual = mensaje.getPrecio();
-                                    comprarLibro(libro, precioActual);
+                                Iterator<String> iterator = subastasActivas.keySet().iterator();
+                                while (iterator.hasNext()) {
+                                    String libro = iterator.next();
 
-                                    // Finalizamos el comportamiento
-                                    eliminarLibro(libro);
+                                    if (libro.equals(mensaje.getLibro()) && getLocalName().equals(mensaje.getGanador())) {
+                                        // Actualizaciones necesarias
+                                        subastasActivas.get(libro).setGanador(false);
+                                        subastasActivas.get(libro).setPrecio(mensaje.getPrecio());
 
-                                    // Actualizamos las tablas de la gui
-                                    gui.actualizarTabla(obtenerSubastasData());
-                                    gui.actualizarTablaLibrosDeseados(getLibrosDeseados());
-                                    gui.actualizarTablaComprados(getLibrosComprados());
+                                        // Comprar el libro
+                                        comprarLibro(libro, subastasActivas.get(libro).getPrecio());
+
+                                        // Finalizamos el comportamiento
+                                        librosDeseados.remove(libro);
+                                        iterator.remove(); // Elimina el libro de manera segura
+
+                                        // Actualizamos las tablas de la GUI
+                                        gui.actualizarTabla(obtenerSubastasData());
+                                        gui.actualizarTablaLibrosDeseados(getLibrosDeseados());
+                                        gui.actualizarTablaComprados(getLibrosComprados());
+                                    }
                                 }
+
                             }
                         }
                     } catch (Exception e) {
@@ -392,7 +334,84 @@ public class Comprador extends Agent {
                     }
                 }
             }
-            parallelBehaviour.addSubBehaviour(comportamientoVacio);
         }
     }
+
+    // Mensaje CFP
+    private class CFPBehaviour extends CyclicBehaviour {
+
+        public CFPBehaviour(Agent a) {
+            super(a);
+        }
+
+        @Override
+        public void action() {
+            // Esperar un mensaje de tipo "call-for-proposal"
+            MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.CFP);
+            ACLMessage mensajeCFP = myAgent.receive(mt);
+
+            if (mensajeCFP != null) {
+                try {
+                    ContentElement contenido = manager.extractContent(mensajeCFP);
+                    if (contenido instanceof Action) {
+                        Action action = (Action) contenido;
+                        Object objeto = action.getAction();
+                        if (objeto instanceof DefaultMensaje) {
+                            DefaultMensaje mensaje = (DefaultMensaje) objeto;
+
+                            for (String libro : subastasActivas.keySet()) {
+                                if (System.currentTimeMillis() < mensajeCFP.getReplyByDate().getTime()) {
+                                    if (getLocalName().equals(mensaje.getDestinatario())) {
+                                        if (libro.equals(mensaje.getLibro())) {
+                                            if (librosDeseados.get(libro) >= mensaje.getPrecio()) {
+                                                // Creamos el mensaje ontológico
+                                                DefaultMensaje mensajeP = new DefaultMensaje();
+                                                mensajeP.setLibro(mensaje.getLibro());
+                                                mensajeP.setPrecio(mensaje.getPrecio());
+
+                                                // Enviar una respuesta "propose"
+                                                ACLMessage mensajePropuesta = new ACLMessage(ACLMessage.PROPOSE);
+                                                mensajePropuesta.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
+                                                mensajePropuesta.setOntology(ontology.getName());
+                                                mensajePropuesta.setLanguage(codec.getName());
+                                                Action actionP = new Action(getAID(), mensajeP);
+                                                manager.fillContent(mensajePropuesta, actionP);
+                                                send(mensajePropuesta);
+
+                                                // Print para debug
+                                                System.out.println("[" + getLocalName() + "] Enviado 'propose' al vendedor por el libro: "
+                                                        + mensaje.getLibro() + " | " + mensaje.getPrecio());
+                                            } else {
+                                                DefaultMensaje mensajeP = new DefaultMensaje();
+                                                mensajeP.setLibro(mensaje.getLibro());
+                                                ACLMessage mensajeNU = new ACLMessage(ACLMessage.NOT_UNDERSTOOD);
+                                                mensajeNU.addReceiver(mensajeCFP.getSender()); // Enviar al vendedor
+                                                mensajeNU.setOntology(ontology.getName());
+                                                mensajeNU.setLanguage(codec.getName());
+                                                Action actionP = new Action(getAID(), mensajeP);
+                                                manager.fillContent(mensajeNU, actionP);
+                                                send(mensajeNU);
+                                                // Print para debug
+                                                System.out.println("[" + getLocalName() + "] El precio es mayor.");
+                                            }
+                                        } else {
+                                            System.out.println("[" + getLocalName() + "] El libro no es igual: " +
+                                                    libro + " vs " + mensaje.getLibro());
+                                        }
+                                    } else {
+                                        System.out.println("[" + getLocalName() + "] El destinatario no coincide.");
+                                    }
+                                } else {
+                                    System.out.println("[" + getLocalName() + "] El tiempo ha expirado.");
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
 }

@@ -1,3 +1,6 @@
+// Ignacio Garbayo Fernández, 2024-2025
+// Prácticas 6/7. Computación Distribuida
+
 public class DataVendedor {
     private String libro;
     private int precio;

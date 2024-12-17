@@ -1,10 +1,10 @@
 // Ignacio Garbayo Fernández, 2024-2025
 // Prácticas 6/7. Computación Distribuida
 
-public class PrecioIncremento {
+public class PrecioGanador {
 
     private int precio;
-    private int incremento;
+    private boolean ganador;
 
     public int getPrecio() {
         return precio;
@@ -14,17 +14,17 @@ public class PrecioIncremento {
         this.precio = precio;
     }
 
-    public int getIncremento() {
-        return incremento;
+    public boolean getGanador() {
+        return ganador;
     }
 
-    public void setIncremento(int incremento) {
-        this.incremento = incremento;
+    public void setGanador(boolean ganador) {
+        this.ganador = ganador;
     }
 
-    public PrecioIncremento(int precio, int incremento) {
+    public PrecioGanador(int precio, boolean ganador) {
         this.precio = precio;
-        this.incremento = incremento;
+        this.ganador = ganador;
     }
 
 

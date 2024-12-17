@@ -1,3 +1,6 @@
+// Ignacio Garbayo Fernández, 2024-2025
+// Prácticas 6/7. Computación Distribuida
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -10,8 +13,6 @@ public class CompradorGUI extends JFrame {
     private JTextField libroTextField; // Campo de texto para el nombre del libro
     private JTextField maximoTextField; // Campo de texto para el precio máximo
     private JButton anadirButton; // Botón para añadir libro
-    private JButton abandonarButton; // Botón para abandonar subasta
-    private JTextField libroAbandonarTextField; // Campo de texto para el libro a abandonar
     private JTable tablaSubastas; // Tabla para mostrar las subastas
     private DefaultTableModel tableModel; // Modelo para la tabla de subastas
     private JTable tablaLibrosDeseados; // Tabla para mostrar los libros deseados
@@ -34,8 +35,6 @@ public class CompradorGUI extends JFrame {
         libroTextField = new JTextField(20);
         maximoTextField = new JTextField(10);
         anadirButton = new JButton("Añadir libro");
-        abandonarButton = new JButton("Abandonar subasta");
-        libroAbandonarTextField = new JTextField(20);
 
         // Componentes para eliminar libros
         eliminarButton = new JButton("Eliminar libro");
@@ -100,7 +99,7 @@ public class CompradorGUI extends JFrame {
         setLayout(new BorderLayout()); // Usamos BorderLayout para dividir el espacio
 
         JPanel panelFormulario = new JPanel();
-        panelFormulario.setLayout(new GridLayout(8, 3)); // Usamos GridLayout para los campos y botones
+        panelFormulario.setLayout(new GridLayout(6, 3)); // Usamos GridLayout para los campos y botones
         panelFormulario.add(new JLabel(" "));
         panelFormulario.add(new JLabel("         GESTIÓN DE LIBROS"));
         panelFormulario.add(new JLabel(" "));
@@ -110,12 +109,6 @@ public class CompradorGUI extends JFrame {
         panelFormulario.add(new JLabel("Precio máximo:"));
         panelFormulario.add(maximoTextField);
         panelFormulario.add(anadirButton);
-        panelFormulario.add(new JLabel(" "));
-        panelFormulario.add(new JLabel(" "));
-        panelFormulario.add(new JLabel(" "));
-        panelFormulario.add(new JLabel("Libro a abandonar:"));
-        panelFormulario.add(libroAbandonarTextField);
-        panelFormulario.add(abandonarButton);
         panelFormulario.add(new JLabel(" "));
         panelFormulario.add(new JLabel(" "));
         panelFormulario.add(new JLabel(" "));
@@ -183,33 +176,6 @@ public class CompradorGUI extends JFrame {
                     libroEliminarTextField.setText(""); // Limpiar el campo libro a eliminar
                 } else {
                     JOptionPane.showMessageDialog(CompradorGUI.this, "El libro no se encuentra en la lista de libros deseados.", "Error", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        });
-
-        setVisible(true);
-
-        // Acción del botón "Abandonar Subasta"
-        abandonarButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String libro = libroAbandonarTextField.getText().trim();
-
-                // Validar que se ha ingresado un libro
-                if (libro.isEmpty()) {
-                    JOptionPane.showMessageDialog(CompradorGUI.this, "Por favor, ingrese el nombre del libro a abandonar.", "Error", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-
-                // Llamar al método abandonarSubasta del comprador
-                boolean resultado = comprador.eliminarLibro(libro);
-
-                if (resultado) {
-                    actualizarTablaLibrosDeseados(comprador.getLibrosDeseados());
-                    JOptionPane.showMessageDialog(CompradorGUI.this, "Subasta abandonada correctamente", "Éxito", JOptionPane.INFORMATION_MESSAGE);
-                    libroAbandonarTextField.setText(""); // Limpiar el campo libro a abandonar
-                } else {
-                    JOptionPane.showMessageDialog(CompradorGUI.this, "No se puede abandonar la subasta en este momento.", "Error", JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
